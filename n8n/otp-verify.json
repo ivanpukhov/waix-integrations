@@ -1,0 +1,219 @@
+{
+  "name": "WAIX · OTP → проверить код",
+  "nodes": [
+    {
+      "id": "124c9ea0-9d8d-46f3-99bf-693c4f01e980",
+      "name": "Server webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "waix-otp-verify",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "e5866174-1f86-4473-ae22-48a6a182c8b9"
+    },
+    {
+      "id": "1d94a26f-f763-479c-84d0-7f9403be8a24",
+      "name": "Prepare request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const b = $json.body || {};\nconst invalid = error => [{json:{valid:false,error}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!uuid.test(b.id || '') || !/^\\d{6}$/.test(b.code || '')) return invalid('Укажите id запроса и шестизначный код.');\nreturn [{json:{valid:true,body:{id:b.id,code:b.code}}}];"
+      }
+    },
+    {
+      "id": "dabdb392-bf98-4ce9-8ae8-93551b188223",
+      "name": "Valid request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1ca5b526-2d6f-4624-90a6-54773f46ce29",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "ba2bc8e8-114e-4410-be6c-3482f5bfe5f7",
+      "name": "WAIX API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://waix.kz/api/v1/otp/verify",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "1c8d651a-471b-47e7-9541-55fb3e7a7ab3",
+      "name": "Return API result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        -100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.body?.data ? {...$json.body, data: Object.fromEntries(Object.entries($json.body.data).filter(([key]) => key !== 'test_code'))} : $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      }
+    },
+    {
+      "id": "22776d54-32bb-460b-a67c-9210f3769399",
+      "name": "Invalid request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        150
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {error: $json.error} }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "02ecf2db-7729-45d3-b42c-c1809b29720c",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "width": 1000,
+        "height": 230,
+        "content": "## WAIX · OTP → проверить код\n1. Server webhook: create Header Auth with X-Workflow-Key and your own secret. Call only from your backend.\n2. WAIX API: create a different Header Auth with Authorization = Bearer <WAIX key>.\n3. Prepare request: set your connection/template for messages. OTP uses a project key; start with sandbox.\n4. Use a persistent event_id UUID per operation. Never expose either secret in browser code.\n5. Execution history is disabled to avoid retaining phone numbers and OTP codes. Activate only after a test.\nSee https://waix.kz/integrations/n8n"
+      }
+    }
+  ],
+  "connections": {
+    "Server webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare request": {
+      "main": [
+        [
+          {
+            "node": "Valid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid request": {
+      "main": [
+        [
+          {
+            "node": "WAIX API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAIX API": {
+      "main": [
+        [
+          {
+            "node": "Return API result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}

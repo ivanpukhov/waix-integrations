@@ -1,0 +1,59 @@
+{
+  "message": {
+    "method": "POST",
+    "url": "https://waix.kz/api/v1/messages",
+    "headers": {
+      "Authorization": "Bearer YOUR_WAIX_KEY",
+      "Idempotency-Key": "PERSISTED_EVENT_UUID",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "connection_id": "YOUR_CONNECTION_UUID",
+      "to": "+77071234567",
+      "type": "template",
+      "template": {
+        "name": "your_approved_template",
+        "language": {
+          "code": "ru"
+        },
+        "components": [
+          {
+            "type": "body",
+            "parameters": [
+              {
+                "type": "text",
+                "text": "42"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "otp_send": {
+    "method": "POST",
+    "url": "https://waix.kz/api/v1/otp/send",
+    "headers": {
+      "Authorization": "Bearer YOUR_OTP_PROJECT_KEY",
+      "Idempotency-Key": "PERSISTED_EVENT_UUID",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "to": "+77071234567",
+      "channel": "whatsapp",
+      "ttl": 300
+    }
+  },
+  "otp_verify": {
+    "method": "POST",
+    "url": "https://waix.kz/api/v1/otp/verify",
+    "headers": {
+      "Authorization": "Bearer YOUR_OTP_PROJECT_KEY",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "CHALLENGE_UUID_FROM_SEND",
+      "code": "123456"
+    }
+  }
+}

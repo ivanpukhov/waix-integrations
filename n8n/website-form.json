@@ -1,0 +1,224 @@
+{
+  "name": "WAIX · Форма сайта → WhatsApp",
+  "nodes": [
+    {
+      "id": "7a00bd1a-201a-43bb-83ad-b20a2bfc684f",
+      "name": "Server webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "waix-website-form",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "5d314e27-5a4b-4025-9561-11f48495d6a1"
+    },
+    {
+      "id": "19ba2d92-4bdd-471d-bb16-49c27fd75509",
+      "name": "Prepare request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const b = $json.body || {};\nconst invalid = error => [{json:{valid:false,error}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\n// Replace connection and template below with your own approved template.\nconst connectionId = 'REPLACE_CONNECTION_ID';\nconst templateName = 'your_approved_template';\nconst language = 'ru';\nif (!uuid.test(connectionId)) return invalid('Настройте Connection ID в узле Prepare request.');\nif (!uuid.test(b.event_id || '')) return invalid('event_id должен быть UUID, сохранённым вашим сервером для этой отправки.');\nif (!/^\\+[1-9]\\d{7,14}$/.test(b.phone || '')) return invalid('Номер должен быть в формате E.164.');\nif (b.whatsapp_consent !== true) return invalid('Нет подтверждения согласия клиента на сообщения WhatsApp.');\nif (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 500) return invalid('Заполните поле name, до 500 символов.');\nreturn [{json:{valid:true,idempotency_key:b.event_id,body:{connection_id:connectionId,to:b.phone,type:'template',template:{name:templateName,language:{code:language},components:[{type:'body',parameters:[{type:'text',text:b.name}]}]}}}}];"
+      }
+    },
+    {
+      "id": "4b2083cf-2592-4d35-81b1-ad356041ae2e",
+      "name": "Valid request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7a56fdf1-9551-4ed8-b124-60902bbc76df",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "2c3fe89c-6a1b-4199-b8bb-dbf963342f3a",
+      "name": "WAIX API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://waix.kz/api/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e045268c-9c50-42ee-9558-a52453e5f1ed",
+      "name": "Return API result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        -100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.body?.data ? {...$json.body, data: Object.fromEntries(Object.entries($json.body.data).filter(([key]) => key !== 'test_code'))} : $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      }
+    },
+    {
+      "id": "a1f4db55-fa2c-4000-b711-4479f50777c8",
+      "name": "Invalid request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        150
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {error: $json.error} }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "c04afd6b-29c9-4760-b81a-c88347b4dada",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "width": 1000,
+        "height": 230,
+        "content": "## WAIX · Форма сайта → WhatsApp\n1. Server webhook: create Header Auth with X-Workflow-Key and your own secret. Call only from your backend.\n2. WAIX API: create a different Header Auth with Authorization = Bearer <WAIX key>.\n3. Prepare request: set your connection/template for messages. OTP uses a project key; start with sandbox.\n4. Use a persistent event_id UUID per operation. Never expose either secret in browser code.\n5. Execution history is disabled to avoid retaining phone numbers and OTP codes. Activate only after a test.\nSee https://waix.kz/integrations/n8n"
+      }
+    }
+  ],
+  "connections": {
+    "Server webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare request": {
+      "main": [
+        [
+          {
+            "node": "Valid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid request": {
+      "main": [
+        [
+          {
+            "node": "WAIX API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAIX API": {
+      "main": [
+        [
+          {
+            "node": "Return API result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}

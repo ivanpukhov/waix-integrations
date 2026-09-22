@@ -1,0 +1,224 @@
+{
+  "name": "WAIX · OTP → отправить код",
+  "nodes": [
+    {
+      "id": "da52a9aa-e80d-4725-84f2-ae7101c4ef5f",
+      "name": "Server webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "waix-otp-send",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "f1c0d078-bfa1-43e3-aafc-8ec5fe672393"
+    },
+    {
+      "id": "178e6552-db28-42a4-ba69-9da1959b7fb1",
+      "name": "Prepare request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const b = $json.body || {};\nconst invalid = error => [{json:{valid:false,error}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!uuid.test(b.event_id || '')) return invalid('event_id должен быть UUID, сохранённым вашим сервером для этой отправки.');\nif (!/^\\+[1-9]\\d{7,14}$/.test(b.phone || '')) return invalid('Номер должен быть в формате E.164, например +77071234567.');\nreturn [{json:{valid:true,idempotency_key:b.event_id,body:{to:b.phone,channel:'whatsapp',ttl:300}}}];"
+      }
+    },
+    {
+      "id": "c2f01909-2785-4c10-bc0d-f2d1f7c4b578",
+      "name": "Valid request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b46b0a67-84ab-4705-832f-d60b8b53ee07",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "a99cde35-55c9-4350-8351-848b5c9cf6ce",
+      "name": "WAIX API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://waix.kz/api/v1/otp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e305e69b-3dec-438d-aaf6-2b56fc860bb0",
+      "name": "Return API result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        -100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.body?.data ? {...$json.body, data: Object.fromEntries(Object.entries($json.body.data).filter(([key]) => key !== 'test_code'))} : $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      }
+    },
+    {
+      "id": "b5231f8b-d85d-4cd0-9783-84216456bc07",
+      "name": "Invalid request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        150
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {error: $json.error} }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "cc4ece86-0e00-4ba1-8e2d-c2db90cf6de6",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "width": 1000,
+        "height": 230,
+        "content": "## WAIX · OTP → отправить код\n1. Server webhook: create Header Auth with X-Workflow-Key and your own secret. Call only from your backend.\n2. WAIX API: create a different Header Auth with Authorization = Bearer <WAIX key>.\n3. Prepare request: set your connection/template for messages. OTP uses a project key; start with sandbox.\n4. Use a persistent event_id UUID per operation. Never expose either secret in browser code.\n5. Execution history is disabled to avoid retaining phone numbers and OTP codes. Activate only after a test.\nSee https://waix.kz/integrations/n8n"
+      }
+    }
+  ],
+  "connections": {
+    "Server webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare request": {
+      "main": [
+        [
+          {
+            "node": "Valid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid request": {
+      "main": [
+        [
+          {
+            "node": "WAIX API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAIX API": {
+      "main": [
+        [
+          {
+            "node": "Return API result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}
