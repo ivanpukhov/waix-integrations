@@ -25,11 +25,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
+        460,
         0
       ],
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst invalid = error => [{json:{valid:false,error}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!uuid.test(b.event_id || '')) return invalid('event_id должен быть UUID, сохранённым вашим сервером для этой отправки.');\nif (!/^\\+[1-9]\\d{7,14}$/.test(b.phone || '')) return invalid('Номер должен быть в формате E.164, например +77071234567.');\nreturn [{json:{valid:true,idempotency_key:b.event_id,body:{to:b.phone,channel:'whatsapp',ttl:300}}}];"
+        "jsCode": "const b = $json.body;\nconst invalid = (error, status = 400, code = 'INVALID_INPUT') => [{json:{valid:false,error,status,code}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!b || typeof b !== 'object' || Array.isArray(b)) return invalid('Передайте JSON-объект.');\nconst validId = value => typeof value === 'string' && uuid.test(value);\nif (!validId(b.event_id)) return invalid('event_id — UUID, который ваш сервер сохранил для этой операции.');\nif (typeof b.phone !== 'string' || !/^\\+[1-9][0-9]{7,14}$/.test(b.phone)) return invalid('Укажите телефон в формате E.164, например +77071234567.');\nconst ttl = $json.waix_otp_ttl;\nif (!Number.isInteger(ttl) || ttl < 60 || ttl > 600) return invalid('Настройте срок кода: от 60 до 600 секунд в WAIX settings.', 500, 'WORKFLOW_NOT_CONFIGURED');\nreturn [{json:{valid:true,idempotency_key:b.event_id,body:{to:b.phone,channel:'whatsapp',ttl}}}];"
       }
     },
     {
@@ -38,7 +38,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        480,
+        700,
         0
       ],
       "parameters": {
@@ -71,7 +71,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        720,
+        940,
         -100
       ],
       "parameters": {
@@ -102,11 +102,13 @@
             "response": {
               "fullResponse": true,
               "neverError": true,
-              "responseFormat": "json"
+              "responseFormat": "text",
+              "outputPropertyName": "body"
             }
           }
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "e305e69b-3dec-438d-aaf6-2b56fc860bb0",
@@ -114,14 +116,30 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        980,
+        1420,
         -100
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json.body?.data ? {...$json.body, data: Object.fromEntries(Object.entries($json.body.data).filter(([key]) => key !== 'test_code'))} : $json.body }}",
+        "responseBody": "={{ $json.body }}",
         "options": {
-          "responseCode": "={{ $json.statusCode }}"
+          "responseCode": "={{ $json.responseCode }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "={{ $json.responseHeaders.some(h => h.name === 'X-Request-Id') ? 'X-Request-Id' : 'Cache-Control' }}",
+                "value": "={{ $json.responseHeaders.find(h => h.name === 'X-Request-Id')?.value || 'no-store' }}"
+              },
+              {
+                "name": "={{ $json.responseHeaders.some(h => h.name === 'Retry-After') ? 'Retry-After' : 'Cache-Control' }}",
+                "value": "={{ $json.responseHeaders.find(h => h.name === 'Retry-After')?.value || 'no-store' }}"
+              }
+            ]
+          }
         }
       }
     },
@@ -131,14 +149,22 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        720,
+        940,
         150
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ {error: $json.error} }}",
+        "responseBody": "={{ {error:$json.error,code:$json.code} }}",
         "options": {
-          "responseCode": 400
+          "responseCode": "={{ $json.status }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
         }
       }
     },
@@ -152,9 +178,70 @@
         -320
       ],
       "parameters": {
-        "width": 1000,
-        "height": 230,
-        "content": "## WAIX · OTP → отправить код\n1. Server webhook: create Header Auth with X-Workflow-Key and your own secret. Call only from your backend.\n2. WAIX API: create a different Header Auth with Authorization = Bearer <WAIX key>.\n3. Prepare request: set your connection/template for messages. OTP uses a project key; start with sandbox.\n4. Use a persistent event_id UUID per operation. Never expose either secret in browser code.\n5. Execution history is disabled to avoid retaining phone numbers and OTP codes. Activate only after a test.\nSee https://waix.kz/integrations/n8n"
+        "width": 1500,
+        "height": 250,
+        "content": "## WAIX · OTP → отправить код\n1. Server webhook: Header Auth, X-Workflow-Key = ваш секрет. Только для вызова с backend.\n2. WAIX API: отдельный Header Auth, Authorization = Bearer <ключ WAIX>.\n3. WAIX settings: задайте Connection ID, шаблон и язык; для OTP — срок кода. OTP использует ключ проекта.\n4. event_id сохраняется до первого запроса. При сетевой ошибке — то же тело и тот же UUID.\n5. История и ручные данные отключены. Ответы не содержат sandbox test_code.\n6. 202 — очередь, а не доставка. 400 — проверьте поля, 401/403 — ключ и права, 429 — дождитесь Retry-After.\nИнструкция: https://github.com/ivanpukhov/waix-integrations/blob/main/n8n/otp-send.README.md"
+      }
+    },
+    {
+      "id": "5503cccb-6ff8-4729-bfe1-1585fb824b84",
+      "name": "WAIX settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [],
+          "number": [
+            {
+              "name": "waix_otp_ttl",
+              "value": 300
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "200b1bbf-1816-4cd0-be3c-93ea0fee607c",
+      "name": "Normalize response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// HTTP Request возвращает текст: даже HTML от прокси станет понятной HTTP-ошибкой.\nconst status = Number($json.statusCode);\nconst headers = $json.headers || {};\nconst requestId = headers['x-request-id'] || headers['X-Request-Id'];\nconst retryAfter = headers['retry-after'] || headers['Retry-After'];\nconst meta = { request_id: typeof requestId === 'string' ? requestId : null };\nlet body = $json.body;\ntry { if (typeof body === 'string') body = JSON.parse(body); } catch { body = null; }\nconst object = body && typeof body === 'object' && !Array.isArray(body);\nlet responseCode = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 502;\nif (status >= 200 && status < 300 && object) responseCode = status;\nif (!object) body = {error: 'WAIX вернул ответ, который не удалось прочитать.', code: 'INVALID_RESPONSE', ...meta};\nif (status >= 300 && status < 400) body = {error: 'WAIX вернул перенаправление. Проверьте адрес API.', code: 'REDIRECT_DISALLOWED', ...meta};\nif (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {\n  const {test_code, ...safe} = body.data;\n  body = {...body, data: safe};\n}\nconst responseHeaders = [{name: 'Cache-Control', value: 'no-store'}];\nif (typeof requestId === 'string' && /^[A-Za-z0-9_.:-]{1,160}$/.test(requestId)) responseHeaders.push({name:'X-Request-Id',value:requestId});\nif (typeof retryAfter === 'string' && (/^[0-9]{1,8}$/.test(retryAfter) || /^[A-Za-z]{3}, [0-9]{2} [A-Za-z]{3} [0-9]{4} [0-9:]{8} GMT$/.test(retryAfter))) responseHeaders.push({name:'Retry-After',value:retryAfter});\nreturn [{json:{body,responseCode,responseHeaders}}];"
+      }
+    },
+    {
+      "id": "787a58cb-8fc3-410b-bad7-ba97bc821c95",
+      "name": "Transport error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1180,
+        160
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {error:'Не удалось получить ответ WAIX. Для отправки результат неизвестен; повторите прежнее тело с тем же event_id. Не создавайте новый UUID.',code:'UPSTREAM_UNAVAILABLE',outcome_unknown:true} }}",
+        "options": {
+          "responseCode": 502,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
       }
     }
   ],
@@ -163,7 +250,7 @@
       "main": [
         [
           {
-            "node": "Prepare request",
+            "node": "WAIX settings",
             "type": "main",
             "index": 0
           }
@@ -200,6 +287,35 @@
       ]
     },
     "WAIX API": {
+      "main": [
+        [
+          {
+            "node": "Normalize response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transport error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAIX settings": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize response": {
       "main": [
         [
           {

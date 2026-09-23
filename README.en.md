@@ -12,12 +12,13 @@ Download a JSON file from `n8n/`, then choose **Import from file** in a new n8n 
 - `order-notification.json`: order event → approved order template.
 - `otp-send.json`: request a WhatsApp authentication challenge.
 - `otp-verify.json`: verify the code entered by a user.
+- `otp-status.json`: read challenge status without exposing a test code.
 
 The workflows use built-in Webhook, Code, If, HTTP Request and Respond to Webhook nodes. No community node installation is needed. They are inactive after import.
 
 1. **Server webhook**: create Header Auth credentials: header `X-Workflow-Key`, value a long random secret. Only your backend calls this endpoint. Add rate limits and authentication to the public form/OTP endpoint on your backend; never put the workflow URL or secrets in frontend JavaScript.
 2. **WAIX API**: create separate Header Auth credentials: header `Authorization`, value `Bearer YOUR_WAIX_API_KEY`. Message workflows need `messages:write`. OTP send/verify need a project key with `otp:send` / `otp:verify`. Begin with a sandbox project.
-3. Message workflows: edit `connectionId`, `templateName`, `language` in **Prepare request**. The supplied mapping is for one body variable: `name` or `order_number`. Change the components to match your approved template exactly. These are examples, not templates automatically created in your Meta account.
+3. Message workflows: edit `connectionId`, `templateName`, `language` in **WAIX settings**. The supplied mapping is for one body variable: `name` or `order_number`. Change the components to match your approved template exactly. These are examples, not templates automatically created in your Meta account.
 4. Call the webhook from your server using the sample bodies below. Preserve `event_id` in your database: generate it once per logical notification and reuse it after a timeout. A new UUID means a new message. Automatic retries are off.
 5. Inspect a test response, verify recipient consent and delivery status, then activate. A `202` response means queued, not delivered. Use WAIX webhooks or the message journal for final status.
 
@@ -64,3 +65,5 @@ See `1c/` for a server-side BSL function and `bitrix24/` for the event handling 
 `node --test test/workflows.test.mjs` checks the workflow graph, validation, payloads, secret handling and response sanitization. Import acceptance and runtime evidence are recorded with each release.
 
 License: MIT. WhatsApp, n8n, Make and Zapier are their respective owners' trademarks.
+
+Version 0.2.0 includes a runnable Bitrix24 receiver/worker with a durable SQLite outbox, an expanded 1C server module, a validated Code by Zapier step, and error-routing instructions for Make. See each Russian README for setup, supported operations and platform-specific verification.

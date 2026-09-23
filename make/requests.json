@@ -55,5 +55,29 @@
       "id": "CHALLENGE_UUID_FROM_SEND",
       "code": "123456"
     }
+  },
+  "message_status": {
+    "method": "GET",
+    "url": "https://waix.kz/api/v1/messages/MESSAGE_UUID_FROM_SEND",
+    "headers": {
+      "Authorization": "Bearer YOUR_WAIX_KEY",
+      "Accept": "application/json"
+    }
+  },
+  "otp_status": {
+    "method": "GET",
+    "url": "https://waix.kz/api/v1/otp/CHALLENGE_UUID_FROM_SEND",
+    "headers": {
+      "Authorization": "Bearer YOUR_OTP_PROJECT_KEY",
+      "Accept": "application/json"
+    }
+  },
+  "templates": {
+    "method": "GET",
+    "url": "https://waix.kz/api/v1/connections/YOUR_CONNECTION_UUID/templates",
+    "headers": {
+      "Authorization": "Bearer YOUR_WAIX_KEY",
+      "Accept": "application/json"
+    }
   }
 }

@@ -1,8 +1,8 @@
 {
-  "name": "WAIX · Заказ → WhatsApp",
+  "name": "WAIX · OTP → статус кода",
   "nodes": [
     {
-      "id": "cc09586d-fe95-4d1f-bf6d-d80270a939bd",
+      "id": "124c9ea0-9d8d-46f3-99bf-693c4f01e980",
       "name": "Server webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -12,15 +12,15 @@
       ],
       "parameters": {
         "httpMethod": "POST",
-        "path": "waix-order-notification",
+        "path": "waix-otp-status",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
       },
-      "webhookId": "3fc219ad-6b75-4a58-a454-b33de522e0a1"
+      "webhookId": "20a2f827-a3ef-4bde-a27d-01fcf2ee3312"
     },
     {
-      "id": "f1a6380e-ac4d-4f12-b63f-77d66c6d8a81",
+      "id": "1d94a26f-f763-479c-84d0-7f9403be8a24",
       "name": "Prepare request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -29,11 +29,11 @@
         0
       ],
       "parameters": {
-        "jsCode": "const b = $json.body;\nconst invalid = (error, status = 400, code = 'INVALID_INPUT') => [{json:{valid:false,error,status,code}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!b || typeof b !== 'object' || Array.isArray(b)) return invalid('Передайте JSON-объект.');\nconst validId = value => typeof value === 'string' && uuid.test(value);\nif (!validId(b.event_id)) return invalid('event_id — UUID, который ваш сервер сохранил для этой операции.');\nif (typeof b.phone !== 'string' || !/^\\+[1-9][0-9]{7,14}$/.test(b.phone)) return invalid('Укажите телефон в формате E.164, например +77071234567.');\nconst connectionId = $json.waix_connection_id;\nconst templateName = $json.waix_template;\nconst language = $json.waix_language;\nif (!validId(connectionId) || typeof templateName !== 'string' || templateName === 'your_approved_template' || !/^[a-z0-9_]{1,512}$/.test(templateName) || typeof language !== 'string' || !/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language)) return invalid('Укажите Connection ID, одобренный шаблон и язык в узле WAIX settings.', 500, 'WORKFLOW_NOT_CONFIGURED');\nif (b.whatsapp_consent !== true) return invalid('Нужно подтверждённое согласие клиента на сообщения WhatsApp.');\nif (typeof b.order_number !== 'string' || !b.order_number.trim() || b.order_number.length > 500) return invalid('Заполните order_number: строка до 500 символов.');\nreturn [{json:{valid:true,idempotency_key:b.event_id,body:{connection_id:connectionId,to:b.phone,type:'template',template:{name:templateName,language:{code:language},components:[{type:'body',parameters:[{type:'text',text:b.order_number.trim()}]}]}}}}];"
+        "jsCode": "const b = $json.body;\nconst invalid = (error, status = 400, code = 'INVALID_INPUT') => [{json:{valid:false,error,status,code}}];\nconst uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;\nif (!b || typeof b !== 'object' || Array.isArray(b)) return invalid('Передайте JSON-объект.');\nconst validId = value => typeof value === 'string' && uuid.test(value);\nif (!validId(b.id)) return invalid('id должен быть UUID запроса OTP.');\nreturn [{json:{valid:true,body:{id:b.id}}}];"
       }
     },
     {
-      "id": "b6b22408-3daf-419b-b689-b67533f26fb6",
+      "id": "dabdb392-bf98-4ce9-8ae8-93551b188223",
       "name": "Valid request",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -51,7 +51,7 @@
           },
           "conditions": [
             {
-              "id": "e32563e0-6346-407e-87ae-0577930bb6c5",
+              "id": "1ca5b526-2d6f-4624-90a6-54773f46ce29",
               "leftValue": "={{ $json.valid }}",
               "rightValue": true,
               "operator": {
@@ -66,7 +66,7 @@
       }
     },
     {
-      "id": "88986649-f300-453e-8e38-8d6d4ad20488",
+      "id": "ba2bc8e8-114e-4410-be6c-3482f5bfe5f7",
       "name": "WAIX API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -75,22 +75,16 @@
         -100
       ],
       "parameters": {
-        "method": "POST",
-        "url": "https://waix.kz/api/v1/messages",
+        "method": "GET",
+        "url": "={{ 'https://waix.kz/api/v1/otp/' + $json.body.id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            {
-              "name": "Idempotency-Key",
-              "value": "={{ $json.idempotency_key }}"
-            }
-          ]
+          "parameters": []
         },
-        "sendBody": true,
+        "sendBody": false,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}",
         "options": {
           "timeout": 30000,
           "redirect": {
@@ -111,7 +105,7 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "ffc9fb2e-f332-4e2d-bf05-4777e3ee2493",
+      "id": "1c8d651a-471b-47e7-9541-55fb3e7a7ab3",
       "name": "Return API result",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -144,7 +138,7 @@
       }
     },
     {
-      "id": "4712d41f-b948-4e1b-8a1b-ceecbc73b25d",
+      "id": "22776d54-32bb-460b-a67c-9210f3769399",
       "name": "Invalid request",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -169,7 +163,7 @@
       }
     },
     {
-      "id": "1bc4321a-8265-4074-a994-7bb19e13ed0f",
+      "id": "02ecf2db-7729-45d3-b42c-c1809b29720c",
       "name": "Setup",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -180,11 +174,11 @@
       "parameters": {
         "width": 1500,
         "height": 250,
-        "content": "## WAIX · Заказ → WhatsApp\n1. Server webhook: Header Auth, X-Workflow-Key = ваш секрет. Только для вызова с backend.\n2. WAIX API: отдельный Header Auth, Authorization = Bearer <ключ WAIX>.\n3. WAIX settings: задайте Connection ID, шаблон и язык; для OTP — срок кода. OTP использует ключ проекта.\n4. event_id сохраняется до первого запроса. При сетевой ошибке — то же тело и тот же UUID.\n5. История и ручные данные отключены. Ответы не содержат sandbox test_code.\n6. 202 — очередь, а не доставка. 400 — проверьте поля, 401/403 — ключ и права, 429 — дождитесь Retry-After.\nИнструкция: https://github.com/ivanpukhov/waix-integrations/blob/main/n8n/order-notification.README.md"
+        "content": "## WAIX · OTP → статус кода\n1. Server webhook: Header Auth, X-Workflow-Key = ваш секрет. Только для вызова с backend.\n2. WAIX API: отдельный Header Auth, Authorization = Bearer <ключ WAIX>.\n3. WAIX settings: задайте Connection ID, шаблон и язык; для OTP — срок кода. OTP использует ключ проекта.\n4. event_id сохраняется до первого запроса. При сетевой ошибке — то же тело и тот же UUID.\n5. История и ручные данные отключены. Ответы не содержат sandbox test_code.\n6. 202 — очередь, а не доставка. 400 — проверьте поля, 401/403 — ключ и права, 429 — дождитесь Retry-After.\nИнструкция: https://github.com/ivanpukhov/waix-integrations/blob/main/n8n/otp-status.README.md"
       }
     },
     {
-      "id": "5d3b000f-b1af-4bd5-8d77-60fb8c45d9d8",
+      "id": "1de92e75-2f5e-44d0-93d9-5513b7eff99e",
       "name": "WAIX settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
@@ -195,27 +189,14 @@
       "parameters": {
         "keepOnlySet": false,
         "values": {
-          "string": [
-            {
-              "name": "waix_connection_id",
-              "value": "REPLACE_CONNECTION_ID"
-            },
-            {
-              "name": "waix_template",
-              "value": "your_approved_template"
-            },
-            {
-              "name": "waix_language",
-              "value": "ru"
-            }
-          ],
+          "string": [],
           "number": []
         },
         "options": {}
       }
     },
     {
-      "id": "3ec38e7b-24f0-41ee-ab80-1b40dc2e2c64",
+      "id": "2a61cc31-39f0-4893-a26b-1008e378b1ad",
       "name": "Normalize response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -228,7 +209,7 @@
       }
     },
     {
-      "id": "9dec0710-c55f-4caf-954b-aea2f1ced90d",
+      "id": "58eb2ee9-0ef0-4edb-b491-40d00d01c330",
       "name": "Transport error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -238,7 +219,7 @@
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ {error:'Не удалось получить ответ WAIX. Для отправки результат неизвестен; повторите прежнее тело с тем же event_id. Не создавайте новый UUID.',code:'UPSTREAM_UNAVAILABLE',outcome_unknown:true} }}",
+        "responseBody": "={{ {error:'Не удалось получить ответ WAIX. Для отправки результат неизвестен; повторите прежнее тело с тем же event_id. Не создавайте новый UUID.',code:'UPSTREAM_UNAVAILABLE',outcome_unknown:false} }}",
         "options": {
           "responseCode": 502,
           "responseHeaders": {

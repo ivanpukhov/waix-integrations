@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
-      - run: node --test test/workflows.test.mjs
-      - name: Import all four workflows into n8n
-        run: docker run --rm --mount type=bind,src="$PWD/n8n",dst=/workflows,readonly -e N8N_DIAGNOSTICS_ENABLED=false -e N8N_VERSION_NOTIFICATIONS_ENABLED=false n8nio/n8n:2.40.5@sha256:9f693fd5565539efd5e75ad168526c8041a6af516d9e50bc4d9cb1c9c5031523 import:workflow --separate --input=/workflows
+      - run: node --test test/*.test.mjs
+      - run: python3 -m unittest discover -s bitrix24/tests
+      - name: Execute all five workflows in n8n against a local mock
+        run: node test/n8n-runtime.mjs
