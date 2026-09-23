@@ -1,64 +1,54 @@
-# WAIX integrations
+# Интеграции WAIX с n8n, Make, Zapier, 1С и Bitrix24
 
-Importable n8n workflows and integration recipes for [WAIX API v1](https://waix.kz/docs). These are server-side examples. No credentials are included.
+[English](README.en.md)
 
-## n8n: import a workflow
+Готовые сценарии и примеры для [WAIX API v1](https://waix.kz/docs): сообщения WhatsApp по заявкам и заказам, отправка и проверка одноразовых кодов. Все примеры запускаются на сервере; ключей и данных клиентов в репозитории нет.
 
-Download a JSON file from `n8n/`, then choose **Import from file** in a new n8n workflow:
+## Выберите платформу
 
-- `website-form.json`: your site's backend → approved WhatsApp template.
-- `order-notification.json`: order event → approved order template.
-- `otp-send.json`: request a WhatsApp authentication challenge.
-- `otp-verify.json`: verify the code entered by a user.
+| Платформа | Что есть в репозитории |
+| --- | --- |
+| [n8n](n8n/README.md) | Четыре JSON-сценария для импорта, настройка credentials и описание каждого узла |
+| [Make](make/README.md) | Настройки HTTP-модуля и тела запросов |
+| [Zapier](zapier/README.md) | Настройки Custom Request и тела запросов |
+| [1С](1c/README.md) | Пример серверного общего модуля на BSL |
+| [Bitrix24](bitrix24/README.md) | Обработка события сделки через REST API и серверный адаптер |
 
-The workflows use built-in Webhook, Code, If, HTTP Request and Respond to Webhook nodes. No community node installation is needed. They are inactive after import.
+## Быстрый старт в n8n
 
-1. **Server webhook**: create Header Auth credentials: header `X-Workflow-Key`, value a long random secret. Only your backend calls this endpoint. Add rate limits and authentication to the public form/OTP endpoint on your backend; never put the workflow URL or secrets in frontend JavaScript.
-2. **WAIX API**: create separate Header Auth credentials: header `Authorization`, value `Bearer YOUR_WAIX_API_KEY`. Message workflows need `messages:write`. OTP send/verify need a project key with `otp:send` / `otp:verify`. Begin with a sandbox project.
-3. Message workflows: edit `connectionId`, `templateName`, `language` in **Prepare request**. The supplied mapping is for one body variable: `name` or `order_number`. Change the components to match your approved template exactly. These are examples, not templates automatically created in your Meta account.
-4. Call the webhook from your server using the sample bodies below. Preserve `event_id` in your database: generate it once per logical notification and reuse it after a timeout. A new UUID means a new message. Automatic retries are off.
-5. Inspect a test response, verify recipient consent and delivery status, then activate. A `202` response means queued, not delivered. Use WAIX webhooks or the message journal for final status.
+1. Выберите JSON в папке `n8n/` и импортируйте его через **Import from file**.
+2. Создайте два разных набора **Header Auth credentials**: один защищает входящий вебхук (`X-Workflow-Key`), второй передаёт ключ WAIX (`Authorization: Bearer YOUR_WAIX_API_KEY`).
+3. Для сообщений укажите Connection ID, точное имя одобренного шаблона и язык в узле **Prepare request**. Для OTP используйте ключ отдельного проекта; сначала sandbox.
+4. Отправьте тестовый запрос со своего сервера. UUID события должен быть сохранён в вашей базе до запроса.
+5. Проверьте ответ и доставку, затем активируйте сценарий. После импорта все сценарии выключены.
 
-Execution history and pinned data are disabled to avoid storing phone numbers and authentication codes. An OTP send response intentionally omits `test_code`; read the sandbox code through the authenticated WAIX API during backend tests. Do not return it to the user being authenticated.
+Используются встроенные узлы n8n: Webhook, Code, If, HTTP Request, Respond to Webhook и Sticky Note. Дополнительный community node устанавливать не нужно. Импорт проверен в n8n 2.40.5; названия пунктов интерфейса в других версиях могут отличаться.
 
-### Website form
+Подробные инструкции к каждому сценарию:
 
-```json
-{"event_id":"f5bf0474-d4b6-4ca5-bd1b-92e44f3ad0fb","phone":"+77071234567","name":"Aida","whatsapp_consent":true}
+- [Форма сайта → сообщение WhatsApp](n8n/website-form.README.md).
+- [Заказ → уведомление WhatsApp](n8n/order-notification.README.md).
+- [Отправка OTP](n8n/otp-send.README.md).
+- [Проверка OTP](n8n/otp-verify.README.md).
+
+## Что нужно учесть
+
+- Ключ WAIX и URL внутреннего сценария храните на сервере. Публичную форму защищает ваш backend: проверка данных, согласие на сообщения и ограничение частоты запросов.
+- При повторе используйте прежний UUID и неизменное тело запроса. Новый UUID создаёт новое сообщение. Автоматические повторы в примерах выключены.
+- HTTP `202` означает очередь. Подтверждение доставки приходит через вебхук WAIX либо видно в журнале сообщений.
+- ID OTP-запроса свяжите с серверной сессией пользователя. Код, sandbox `test_code` и ключи не должны попадать в аналитику, клиентский JavaScript или общие логи.
+- В n8n отключено сохранение истории успешных, неудачных и ручных запусков. Закреплённых данных нет. Не добавляйте реальные коды и телефоны в данные для демонстрации.
+
+Make и Zapier представлены настройками HTTP-запросов; отдельных приложений WAIX в их маркетплейсах пока нет. Для 1С и Bitrix24 приведены примеры для интегратора: их нужно связать с вашей конфигурацией и бизнес-событиями.
+
+## Проверки
+
+```sh
+node --test test/workflows.test.mjs
 ```
 
-### Order notification
+Тесты проверяют структуру сценариев, валидацию полей, запросы, отсутствие секретов и очистку ответа OTP. Они не отправляют реальные сообщения WhatsApp.
 
-```json
-{"event_id":"00dcd40d-ec60-4f65-8991-63ca7c775e47","phone":"+77071234567","order_number":"42","whatsapp_consent":true}
-```
+[Документация](https://waix.kz/docs) · [Все интеграции](https://waix.kz/integrations) · [Поддержка](https://waix.kz/contacts).
 
-### OTP send
-
-```json
-{"event_id":"c6e29497-2fc5-4380-888e-699704be43c5","phone":"+77071234567"}
-```
-
-Keep the returned challenge ID in the authenticated server session that requested the code. The subsequent verify endpoint must accept only that session's challenge ID. The n8n workflow is an authenticated internal service; it does not implement your app's session binding or login policy.
-
-### OTP verify
-
-```json
-{"id":"CHALLENGE_UUID_FROM_SEND","code":"123456"}
-```
-
-Handle invalid codes and expiry. Issue your application's session only after a successful WAIX verification. Apply your own account/IP rate limits; use WAIX limits as an additional boundary.
-
-## Make and Zapier
-
-See `make/README.md` and `zapier/README.md` for HTTP module settings and request bodies. These recipes do not claim a listed marketplace application. Each platform's account, billing and publishing requirements remain separate from WAIX.
-
-## 1C and Bitrix24
-
-See `1c/` for a server-side BSL function and `bitrix24/` for the event handling recipe. These are integration examples, not an extension installed automatically into an arbitrary 1C configuration or Bitrix24 portal.
-
-## Checks
-
-`node --test test/workflows.test.mjs` checks the workflow graph, validation, payloads, secret handling and response sanitization. Import acceptance and runtime evidence are recorded with each release.
-
-License: MIT. WhatsApp, n8n, Make and Zapier are their respective owners' trademarks.
+Лицензия — MIT. Названия WhatsApp, n8n, Make и Zapier принадлежат их владельцам.

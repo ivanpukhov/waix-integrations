@@ -1,14 +1,24 @@
 # WAIX + Zapier
 
-Use **Webhooks by Zapier → Custom Request**. This recipe uses Zapier's HTTP action; it is not a published native WAIX app. Webhooks by Zapier requires a compatible paid Zapier plan; check [Zapier's documentation](https://help.zapier.com/hc/en-us/articles/8496083355661-How-to-get-started-with-Webhooks-by-Zapier).
+[English](README.en.md) · [Все интеграции](../README.md)
 
-1. Trigger: an order/form event from your server. Provide an `event_id` UUID saved with that event, an E.164 phone number and the template variables.
-2. Filter: recipient consent exists and required fields are filled. Avoid triggering from every intermediate update to the same order.
-3. Action: **Webhooks by Zapier → Custom Request**. Method POST. URL `https://waix.kz/api/v1/messages`. Data Pass-Through: No. Unflatten: No. Basic Auth: empty.
-4. Headers: `Content-Type: application/json`, `Authorization: Bearer YOUR_WAIX_KEY`, `Idempotency-Key: <mapped event_id>`. Keep the Zap private and use a dedicated restricted key. Do not export or share a configured Zap containing a real key.
-5. Body: use `requests.json`. Replace the connection ID and template with your own; map recipient and variables. Produce JSON with a JSON serializer (for example a Code by Zapier step using `JSON.stringify`) before the Custom Request action so quotes and line breaks in names cannot break it.
-6. Save `data.id`. A successful action queues the message; it does not prove delivery. Review the WAIX journal or process delivery webhooks through a signature-validating backend.
+Используйте **Webhooks by Zapier → Custom Request**. Это HTTP-интеграция, а не отдельное приложение WAIX в каталоге Zapier. Для Webhooks нужен подходящий тариф Zapier; условия проверьте в [документации платформы](https://help.zapier.com/hc/en-us/articles/8496083355661-How-to-get-started-with-Webhooks-by-Zapier).
 
-To add OTP, use the `/otp/send` and `/otp/verify` requests and a separate OTP project key. Your own authenticated server must bind each challenge ID to the user's session and rate-limit attempts. Do not send OTP codes, sandbox test codes or API secrets to analytics or shared Zap logs.
+## Настройка сообщения
 
-Keep Catch Hook URLs on your server. Do not expose them in a website form: anyone with that URL could trigger the Zap. For timeout/replay, reuse the original event UUID; never generate a new key inside a retried action.
+1. Триггер получает событие заказа или формы с вашего сервера. Передайте сохранённый UUID `event_id`, номер в E.164 и переменные шаблона.
+2. В фильтре проверьте согласие клиента и обязательные поля. Не отправляйте уведомление при каждом промежуточном изменении одного заказа.
+3. Добавьте **Webhooks by Zapier → Custom Request**. Метод — `POST`, URL — `https://waix.kz/api/v1/messages`. `Data Pass-Through: No`, `Unflatten: No`, `Basic Auth` оставьте пустым.
+4. Заголовки: `Content-Type: application/json`, `Authorization: Bearer YOUR_WAIX_KEY`, `Idempotency-Key: <event_id>`. Создайте отдельный ключ с правом `messages:write`. Сценарий с действующим ключом не экспортируйте и не публикуйте.
+5. Возьмите тело из `requests.json`. Укажите свой Connection ID, одобренный шаблон и язык, сопоставьте телефон и переменные. Формируйте JSON сериализатором — например, `JSON.stringify` в Code by Zapier: так кавычки и переносы строк в пользовательских данных будут экранированы.
+6. Сохраните `data.id`. Успех шага означает постановку сообщения в очередь. Проверяйте доставку в журнале WAIX или обрабатывайте вебхуки через сервер с проверкой подписи.
+
+## OTP
+
+Используйте запросы `/otp/send` и `/otp/verify` из `requests.json` и отдельный ключ OTP-проекта. Ваш backend должен связать ID запроса с сессией пользователя и ограничивать попытки. Код, `test_code` и секреты не должны попадать в аналитику и общие логи Zap.
+
+## Доступ и повторная отправка
+
+URL Catch Hook храните на сервере. Если вставить его в форму сайта, любой человек с этим URL сможет запускать сценарий. При потере ответа используйте исходный UUID события и то же тело запроса; не создавайте новый ключ внутри повторяемого шага.
+
+[API WAIX](https://waix.kz/docs/api-reference) · [Поддержка](https://waix.kz/contacts).

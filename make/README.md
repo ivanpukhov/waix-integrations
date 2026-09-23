@@ -1,15 +1,27 @@
 # WAIX + Make
 
-Use **HTTP → Make a request** after your form/order trigger. This is an HTTP integration recipe, not a listed WAIX Make app. [Make's HTTP documentation](https://apps.make.com/http) describes the module and credential settings. The attached `requests.json` contains the request bodies; it is not a scenario blueprint.
+[English](README.en.md) · [Все интеграции](../README.md)
 
-1. Receive a server-side event with `event_id` (a persistent UUID), `phone`, and `order_number` or `name`. Keep the public form behind your own validation, consent and rate limiting.
-2. Add a filter: an existing customer consent flag is true, the recipient is in E.164 format, and required variables are present.
-3. Add **HTTP → Make a request**, method POST, URL `https://waix.kz/api/v1/messages`.
-4. Store the WAIX key in the HTTP module's credential/keychain configuration: header name `Authorization`, value `Bearer YOUR_KEY`. Do not place a real key in a shared blueprint. Enable only the permissions needed by this scenario.
-5. Add header `Idempotency-Key`: map the persisted UUID from step 1. Content type: JSON. Use the module's JSON/data-structure builder so names and order text are escaped correctly. Do not paste raw user text into an unescaped JSON string.
-6. Set the body fields from `requests.json`: your connection ID, recipient, approved template, language and variables. Enable response parsing. Do not follow redirects.
-7. Save returned `data.id` against the source event. Treat 202 as queued. Delivery status arrives through a signed WAIX webhook or can be read through GET `/messages/{id}`.
+Сценарий использует **HTTP → Make a request** после события формы или заказа. В `requests.json` лежат тела запросов. Это примеры HTTP-интеграции, а не готовый blueprint или отдельное приложение WAIX в Make.
 
-For OTP, create separate scenarios using POST `/otp/send` and POST `/otp/verify`, with an OTP project key. Bind the returned challenge ID to the user's session on your backend. Use a sandbox key first. Do not expose `test_code` or the scenario webhook URL to the browser.
+## Настройка сообщения
 
-For retries, preserve the same event ID and payload, and honor Retry-After on HTTP 429. Inspect 400/401/403 rather than retrying them. Enable confidential-data handling in scenario settings and avoid retaining OTP request bodies in execution history.
+1. Получите серверное событие с `event_id` (сохранённый UUID), `phone` и переменной `order_number` или `name`. Проверка публичной формы и ограничения частоты остаются на вашем сервере.
+2. Добавьте фильтр: у клиента есть согласие на сообщение WhatsApp, номер приведён к E.164, обязательные поля заполнены.
+3. Добавьте **HTTP → Make a request**. Метод `POST`, URL `https://waix.kz/api/v1/messages`.
+4. Сохраните ключ WAIX в credentials/keychain HTTP-модуля: заголовок `Authorization`, значение `Bearer YOUR_KEY`. Для отправки нужен ключ с правом `messages:write`. Не помещайте действующий ключ в общий blueprint.
+5. Добавьте `Idempotency-Key` со значением сохранённого `event_id`. Тип содержимого — JSON. Используйте конструктор структуры данных/JSON: необработанные кавычки и переносы строк из имени клиента не должны ломать запрос.
+6. Возьмите тело из `requests.json`, замените Connection ID, имя одобренного шаблона, язык и переменные своими значениями. Включите разбор ответа; переходы по redirect отключите.
+7. Сохраните `data.id` вместе с исходным событием. `202` означает постановку в очередь. Доставку проверяйте через подписанный вебхук WAIX или `GET /api/v1/messages/{id}`.
+
+## OTP
+
+Для отправки и проверки кода создайте отдельные сценарии с `POST /api/v1/otp/send` и `POST /api/v1/otp/verify`. Используйте ключ OTP-проекта, сначала в sandbox.
+
+Ваш сервер должен связать ID запроса с сессией пользователя и ограничивать попытки. Не передавайте `test_code` или URL внутреннего сценария в браузер. Выдавайте сессию приложения только после успешной проверки кода.
+
+## Ошибки и повторы
+
+После таймаута сохраняйте прежний UUID и тело запроса. Для `429` учитывайте `Retry-After`; при `400`, `401`, `403` исправьте данные или доступ. Включите режим конфиденциальных данных в настройках сценария и не храните OTP-коды в истории выполнения.
+
+[Документация HTTP-модуля Make](https://apps.make.com/http) · [API WAIX](https://waix.kz/docs/api-reference).
