@@ -12,6 +12,7 @@
 | [Make](make/README.md) | Настройки HTTP-модуля и тела запросов |
 | [Zapier](zapier/README.md) | Настройки Custom Request и тела запросов |
 | [1С](1c/README.md) | Пример серверного общего модуля на BSL |
+| [MCP](mcp/README.md) | Удалённый сервер для ИИ-ассистента, OAuth и подтверждение отправки |
 | [Bitrix24](bitrix24/README.md) | Обработка события сделки через REST API и серверный адаптер |
 
 ## Быстрый старт в n8n
