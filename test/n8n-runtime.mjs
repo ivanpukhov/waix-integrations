@@ -1,6 +1,6 @@
 // Real n8n execution against a local mock. Never calls Meta or the live WAIX API.
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -89,6 +89,11 @@ try {
   res.writeHead(req.method==='GET'?200:202,{'content-type':'application/json'}).end(JSON.stringify({data:{id:'f5bf0474-d4b6-4ca5-bd1b-92e44f3ad0fb',status:'queued',test_code:'012345'}}));
  }).listen(9099,'127.0.0.1');`,
   );
+  // Linux Docker runs as UID 1000; the GitHub runner may use a different UID.
+  // These are public test fixtures only, mounted read-only and removed at the end.
+  await chmod(root, 0o755);
+  for (const file of ["mock.cjs", "credentials.json", "flows.json"])
+    await chmod(join(root, file), 0o644);
   const startup = `node /fixtures/mock.cjs &
  n8n import:credentials --input=/fixtures/credentials.json &&
  n8n import:workflow --input=/fixtures/flows.json &&
@@ -127,6 +132,12 @@ try {
   const address = "http://" + docker("port", container, "5678").trim();
   let ready = false;
   for (let i = 0; i < 180; i++) {
+    if (
+      i % 5 === 0 &&
+      docker("inspect", "--format", "{{.State.Running}}", container).trim() !==
+        "true"
+    )
+      throw new Error("n8n container exited during startup");
     try {
       const r = await fetch(address + "/healthz/readiness");
       if (r.ok) {
